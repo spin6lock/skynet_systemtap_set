@@ -1,0 +1,227 @@
+probe begin {
+    warn("Tracing 5891 (/home/spin6lock/work/troy/bin/skynet) for standard Lua 5.1...\n")
+}
+
+
+global ci_offset = 0
+global cfuncs
+
+
+function clvalue(o) {
+    return &@cast(o, "TValue", "/home/spin6lock/work/troy/bin/skynet")->value->gc->cl;
+}
+
+
+function ci_func(ci) {
+    return clvalue(@cast(ci, "CallInfo", "/home/spin6lock/work/troy/bin/skynet")->func)
+}
+
+
+function f_isLua(ci) {
+    f = ci_func(ci)
+    if (f == 0) {
+        return 0;
+    }
+
+    //printf("f_isLua: ci=%x, f=%x, c=%p\n", ci, f, &@cast(f, "Closure", "/home/spin6lock/work/troy/bin/skynet")->c)
+    //print_ubacktrace()
+    return !@cast(f, "Closure", "/home/spin6lock/work/troy/bin/skynet")->c->isC
+}
+
+
+function getstr(ts) {
+    return user_string(&@cast(ts, "TString", "/home/spin6lock/work/troy/bin/skynet")[1])
+}
+
+
+function funcinfo(cl) {
+    //printf("funcinfo: cl: %x\n", cl)
+    if (@cast(cl, "Closure", "/home/spin6lock/work/troy/bin/skynet")->c->isC) {
+        cfunc = @cast(cl, "Closure", "/home/spin6lock/work/troy/bin/skynet")->c->f
+        sym = cfuncs[cfunc]
+        if (sym != "") {
+            info = sym
+
+        } else {
+            sym = "C:" . usymname(cfunc)
+            cfuncs[cfunc] = sym
+            info = sym
+        }
+
+    } else {
+        src = @cast(cl, "Closure", "/home/spin6lock/work/troy/bin/skynet")->l->p->source
+        return getstr(src)
+    }
+
+    return info
+}
+
+
+function pcRel(pc, p) {
+    //printf("sizeof ptr: %d\n", &@cast(0, "Instruction", "/home/spin6lock/work/troy/bin/skynet")[1])
+    return (pc - @cast(p, "Proto", "/home/spin6lock/work/troy/bin/skynet")->code) / &@cast(0, "Instruction", "/home/spin6lock/work/troy/bin/skynet")[1] - 1
+}
+
+
+function currentpc(L, ci) {
+    cl = ci_func(ci)
+    if (@cast(cl, "Closure", "/home/spin6lock/work/troy/bin/skynet")->c->isC) {
+        return -1
+    }
+
+    if (ci == @cast(L, "lua_State", "/home/spin6lock/work/troy/bin/skynet")->ci) {
+        savedpc = @cast(L, "lua_State", "/home/spin6lock/work/troy/bin/skynet")->savedpc
+
+    } else {
+        savedpc = @cast(ci, "CallInfo", "/home/spin6lock/work/troy/bin/skynet")->savedpc
+    }
+
+    cl = ci_func(ci)
+    return pcRel(savedpc, @cast(cl, "Closure", "/home/spin6lock/work/troy/bin/skynet")->l->p)
+}
+
+
+function getline(p, pc) {
+    //printf("p: %p, lineinfo: %p\n", p, @cast(p, "Proto", "/home/spin6lock/work/troy/bin/skynet")->lineinfo)
+    return @cast(p, "Proto", "/home/spin6lock/work/troy/bin/skynet")->lineinfo ? @cast(p, "Proto", "/home/spin6lock/work/troy/bin/skynet")->lineinfo[pc] : 0
+}
+
+
+function currentline(L, ci) {
+    pc = currentpc(L, ci)
+    if (pc < 0) {
+        return -1
+    }
+    //printf("pc = %d\n", pc)
+    cl = ci_func(ci)
+    return getline(@cast(cl, "Closure", "/home/spin6lock/work/troy/bin/skynet")->l->p, pc)
+}
+
+
+function lua_getinfo(L, i_ci) {
+    ci = 0  /* CallInfo *ci */
+    f = 0   /* Closure *f */
+
+    if (i_ci != 0) {
+        base_ci = @cast(L, "lua_State", "/home/spin6lock/work/troy/bin/skynet")->base_ci
+        ci = base_ci + i_ci;
+        f = ci_func(ci)
+        //printf("lua_getinfo: ci=%x, f=%x, isLua=%d\n", ci, f, f_isLua(ci));
+    }
+
+    if (f == 0) {
+        /* info_tailcall() */
+        return "[tail]"
+    }
+
+    /* f != 0 */
+    finfo = funcinfo(f)
+
+    lineno = currentline(L, ci)
+
+    //fname = getfuncname(L, ci)
+
+    if (lineno == -1) {
+        return finfo
+    }
+
+    return sprintf("%s:%d", finfo, lineno)
+}
+
+
+function lua_getstack(L, level) {
+    ci = @cast(L, "lua_State", "/home/spin6lock/work/troy/bin/skynet")->ci
+    base_ci = @cast(L, "lua_State", "/home/spin6lock/work/troy/bin/skynet")->base_ci
+
+    //printf("L=%x, ci=%x, base_ci=%x\n", L, ci, base_ci)
+    if (ci_offset == 0) {
+        ci_offset = &@cast(0, "CallInfo", "/home/spin6lock/work/troy/bin/skynet")[1]
+    }
+
+    //printf("ci offset: %d\n", ci_offset)
+
+    for (; level > 0 && ci > base_ci; ci -= ci_offset) {
+        level--;
+
+        //tt = @cast(ci, "CallInfo", "/home/spin6lock/work/troy/bin/skynet")->func->tt
+        //printf("ci tt: %d\n", tt)
+
+        if (f_isLua(ci)) { /* Lua function? */
+            tailcalls = @cast(ci, "CallInfo", "/home/spin6lock/work/troy/bin/skynet")->tailcalls
+            //printf("it is a lua func! tailcalls=%d\n", tailcalls)
+            level -= tailcalls;  /* skip lost tail calls */
+        }
+    }
+
+    if (level == 0 && ci > base_ci) {  /* level found? */
+        //printf("lua_getstack: ci=%x\n", ci);
+
+        //tt = @cast(ci, "CallInfo", "/home/spin6lock/work/troy/bin/skynet")->func->tt
+        //printf("ci tt: %d\n", tt)
+
+        //ff = &@cast(ci, "CallInfo", "/home/spin6lock/work/troy/bin/skynet")->func->value->gc->cl
+
+        //isC = @cast(ci, "CallInfo", "/home/spin6lock/work/troy/bin/skynet")->func->value->gc->cl->c->isC
+        //printf("isC: %d, %d ff=%x\n", isC, @cast(ff, "Closure", "/home/spin6lock/work/troy/bin/skynet")->c->isC, ff)
+
+        //f = ci_func(ci)
+        //printf("lua_getstack: ci=%x, f=%x, isLua=%d\n", ci, f, f_isLua(ci));
+
+        return ci - base_ci;
+    }
+
+    if (level < 0) {  /* level is of a lost tail call? */
+        return 0;
+    }
+
+    return -1;
+}
+
+
+probe
+process("/home/spin6lock/work/troy/bin/skynet").function("str_find"),
+      process("/home/spin6lock/work/troy/bin/skynet").function("luaL_*"),
+      process("/home/spin6lock/work/troy/bin/skynet").function("lua_*"),
+
+{
+    if (@defined($L) && target() == pid()) {
+        L = $L
+        //printf("HERE: %d\n", L)
+        if (L) {
+            //println("===============")
+            stack = ""
+            level = 0
+            prev_is_tail = 0
+            while (1) {
+                //printf("--- begin: l=%d, u=%d\n", level, user_mode())
+                i_ci = lua_getstack(L, level++)
+
+                //printf("lua_getstack returned: %d\n", i_ci)
+
+                if (i_ci < 0 || level > 200) {
+                    break
+                }
+
+                //printf("%d: i_ci: %s\n", level, lua_getinfo(L, i_ci))
+                frame = lua_getinfo(L, i_ci)
+                if (frame == "[tail]") {
+                    if (prev_is_tail) {
+                        continue
+                    }
+
+                    prev_is_tail = 1
+
+                } else {
+                    prev_is_tail = 0
+                }
+
+                stack .= frame . "\n"
+            }
+
+            if (stack != "") {
+                print(stack)
+                exit()
+            }
+        }
+    }
+}
