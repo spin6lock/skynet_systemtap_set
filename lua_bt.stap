@@ -1,5 +1,5 @@
 probe begin {
-    warn("Tracing 5891 (/home/spin6lock/work/troy/bin/skynet) for standard Lua 5.1...\n")
+    warn("Tracing 7344 (/home/spin6lock/work/troy/bin/skynet) for standard Lua 5.1...\n")
 }
 
 
@@ -8,7 +8,8 @@ global cfuncs
 
 
 function clvalue(o) {
-    return &@cast(o, "TValue", "/home/spin6lock/work/troy/bin/skynet")->value->gc->cl;
+    gcobject = @cast(o, "TValue", "/home/spin6lock/work/troy/bin/skynet")->value_->gc;
+    return &@cast(gcobject, "GCUnion", "/home/spin6lock/work/troy/bin/skynet")->cl;
 }
 
 
@@ -22,10 +23,9 @@ function f_isLua(ci) {
     if (f == 0) {
         return 0;
     }
+    tt = f->tt_ & 0x3f
 
-    //printf("f_isLua: ci=%x, f=%x, c=%p\n", ci, f, &@cast(f, "Closure", "/home/spin6lock/work/troy/bin/skynet")->c)
-    //print_ubacktrace()
-    return !@cast(f, "Closure", "/home/spin6lock/work/troy/bin/skynet")->c->isC
+    return tt == 0x06
 }
 
 
@@ -33,10 +33,15 @@ function getstr(ts) {
     return user_string(&@cast(ts, "TString", "/home/spin6lock/work/troy/bin/skynet")[1])
 }
 
+function get_src(cl) {
+    lua_closure = &@cast(cl, "Closure", "/home/spin6lock/work/troy/bin/skynet")->l
+    src = lua_closure->p->source
+    return src
+}
 
 function funcinfo(cl) {
     //printf("funcinfo: cl: %x\n", cl)
-    if (@cast(cl, "Closure", "/home/spin6lock/work/troy/bin/skynet")->c->isC) {
+    if (!f_isLua(cl)) {
         cfunc = @cast(cl, "Closure", "/home/spin6lock/work/troy/bin/skynet")->c->f
         sym = cfuncs[cfunc]
         if (sym != "") {
@@ -49,7 +54,7 @@ function funcinfo(cl) {
         }
 
     } else {
-        src = @cast(cl, "Closure", "/home/spin6lock/work/troy/bin/skynet")->l->p->source
+        src = get_src(cl)
         return getstr(src)
     }
 
@@ -65,15 +70,15 @@ function pcRel(pc, p) {
 
 function currentpc(L, ci) {
     cl = ci_func(ci)
-    if (@cast(cl, "Closure", "/home/spin6lock/work/troy/bin/skynet")->c->isC) {
+    if (!f_isLua(ci)) {
         return -1
     }
 
     if (ci == @cast(L, "lua_State", "/home/spin6lock/work/troy/bin/skynet")->ci) {
-        savedpc = @cast(L, "lua_State", "/home/spin6lock/work/troy/bin/skynet")->savedpc
+        savedpc = ci->u->l->savedpc
 
     } else {
-        savedpc = @cast(ci, "CallInfo", "/home/spin6lock/work/troy/bin/skynet")->savedpc
+        savedpc = @cast(ci, "CallInfo", "/home/spin6lock/work/troy/bin/skynet")->u->l->savedpc
     }
 
     cl = ci_func(ci)
@@ -82,8 +87,8 @@ function currentpc(L, ci) {
 
 
 function getline(p, pc) {
-    //printf("p: %p, lineinfo: %p\n", p, @cast(p, "Proto", "/home/spin6lock/work/troy/bin/skynet")->lineinfo)
-    return @cast(p, "Proto", "/home/spin6lock/work/troy/bin/skynet")->lineinfo ? @cast(p, "Proto", "/home/spin6lock/work/troy/bin/skynet")->lineinfo[pc] : 0
+    printf("p: %p, lineinfo: %p\n", p, &@cast(p, "Proto", "/home/spin6lock/work/troy/bin/skynet")->lineinfo)
+    return @cast(p, "Proto", "/home/spin6lock/work/troy/bin/skynet")->lineinfo[pc]
 }
 
 
@@ -179,11 +184,11 @@ function lua_getstack(L, level) {
 
 
 probe
-process("/home/spin6lock/work/troy/bin/skynet").function("str_find"),
-      process("/home/spin6lock/work/troy/bin/skynet").function("luaL_*"),
-      process("/home/spin6lock/work/troy/bin/skynet").function("lua_*"),
+process("/home/spin6lock/work/troy/bin/skynet").function("luaL_*"),
+process("/home/spin6lock/work/troy/bin/skynet").function("lua_*")
 
 {
+    printf("============%s\n", $$parms$)
     if (@defined($L) && target() == pid()) {
         L = $L
         //printf("HERE: %d\n", L)
