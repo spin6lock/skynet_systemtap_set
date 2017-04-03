@@ -1,0 +1,43 @@
+probe begin {
+    warn(sprintf("Tracing %d (/home/spin6lock/work/troy/bin/skynet) for standard Lua 5.3...\n", target()))
+}
+
+global bts;
+global quit = 0;
+
+probe
+    process("/home/spin6lock/work/troy/bin/skynet").function("luaL_*"),
+    process("/home/spin6lock/work/troy/bin/skynet").function("lua_*")
+{
+    if (@defined($L) && !quit) {
+        L = $L
+        p = L->ci
+        while (p != 0 && !quit) {
+            tt = p->func->tt_ & 0x3f
+            //printf("tt: %x\n", tt)
+            if ( tt == 0x06 ) {
+                printf("lua function\n")
+                /*
+                gc = p->func->value_->gc
+                proto = @cast(gc, "GCUnion", "/home/spin6lock/work/troy/bin/skynet")->cl->l->p
+                filename = proto->source + 24 + 4 //24 byte size of TString
+                printf("filename:%s\n", "hello")
+                */
+            }
+            if ( tt == 0x16 ) {
+                printf("light c function\n")
+            }
+            if ( tt == 0x26 ) {
+                printf("c function\n")
+            }
+            p = p->previous
+        }
+        printf("=============\n")
+    }
+}
+
+probe timer.s(5) {
+    warn("Quiting now\\n")
+    quit = 1;
+    exit()
+}
