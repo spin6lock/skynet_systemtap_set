@@ -16,13 +16,13 @@ probe
             tt = p->func->tt_ & 0x3f
             //printf("tt: %x\n", tt)
             if ( tt == 0x06 ) {
-                printf("lua function\n")
-                /*
+                printf("lua function\t")
                 gc = p->func->value_->gc
-                proto = @cast(gc, "GCUnion", "/home/spin6lock/work/troy/bin/skynet")->cl->l->p
-                filename = proto->source + 24 + 4 //24 byte size of TString
-                printf("filename:%s\n", "hello")
-                */
+                closure = &@cast(gc, "GCUnion", "/home/spin6lock/work/troy/bin/skynet")->cl
+                lua_closure = &closure->l
+                share_proto = lua_closure->p->sp
+                source = @cast(share_proto, "SharedProto", "/home/spin6lock/work/troy/bin/skynet")->source
+                printf("proto: %x\n", source+28)
             }
             if ( tt == 0x16 ) {
                 printf("light c function\n")
