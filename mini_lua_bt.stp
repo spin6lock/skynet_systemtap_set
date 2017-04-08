@@ -22,10 +22,9 @@ probe
                 lua_closure = &closure->l
                 share_proto = lua_closure->p->sp
                 source = @cast(share_proto, "SharedProto", "/home/spin6lock/work/troy/bin/skynet")->source
-                //lineinfo = &@cast(share_proto, "SharedProto", "/home/spin6lock/work/troy/bin/skynet")->lineinfo
                 lineinfo = share_proto->lineinfo
-                line_index = p->u->l->savedpc - share_proto->code - 1
-                printf("proto: %s\n", kernel_string(source + 27))
+                line_index = p->u->l->savedpc - share_proto->code 
+                printf("proto: %s, lineno: %d\n", kernel_string(source + 27), kernel_int(lineinfo+line_index))
             }
             if ( tt == 0x16 ) {
                 printf("light c function\n")
