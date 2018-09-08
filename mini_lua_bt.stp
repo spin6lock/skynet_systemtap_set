@@ -1,13 +1,12 @@
 probe begin {
-    warn(sprintf("Tracing %d (/home/spin6lock/work/troy/bin/skynet) for standard Lua 5.3...\n", target()))
+    warn(sprintf("Tracing %d (@1) for standard Lua 5.3...\n", target()))
 }
 
-global bts;
 global quit = 0;
 
 probe
-    process("/home/spin6lock/work/troy/bin/skynet").function("luaL_*"),
-    process("/home/spin6lock/work/troy/bin/skynet").function("lua_*")
+    process(@1).function("luaL_*"),
+    process(@1).function("lua_*")
 {
     if (@defined($L) && !quit) {
         L = $L
@@ -18,22 +17,25 @@ probe
             //printf("tt: %x\n", tt)
             if ( tt == 0x06 ) {
                 gc = p->func->value_->gc
-                closure = &@cast(gc, "GCUnion", "/home/spin6lock/work/troy/bin/skynet")->cl
+                closure = &@cast(gc, "GCUnion", @1)->cl
                 lua_closure = &closure->l
                 share_proto = lua_closure->p->sp
-                source = @cast(share_proto, "SharedProto", "/home/spin6lock/work/troy/bin/skynet")->source
+                source = @cast(share_proto, "SharedProto", @1)->source
                 lineinfo = share_proto->lineinfo
                 line_index = p->u->l->savedpc - share_proto->code 
                 filename = kernel_string(source + 27)
                 lineno = kernel_int(lineinfo+line_index) - 1
                 frame = sprintf("%s:%d", filename, lineno)
             }
-            if ( tt == 0x16 ) {
-                frame = "light c function"
-            }
-            if ( tt == 0x26 ) {
-                frame = "c function"
-            }
+            else if ( tt == 0x16 ) {
+                    frame = "light c function"
+                }
+            else if ( tt == 0x26 ) {
+                    frame = "c function"
+                }
+            else 
+                frame = "nil"
+            
             p = p->previous
             stack .= frame . ";"
         }
