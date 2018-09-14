@@ -1,8 +1,7 @@
 #/bin/sh
-if [ "$1" = "" ] | [ "$2" = "" ]; then
-    echo "usage: monitor pid skynet_bin_path"
+if [ "$1" = "" ] | [ "$2" = "" ] | [ "$3" = "" ]; then
+    echo "usage: monitor pid skynet_bin_path service_id_in_decimal"
     exit 1
 fi
-sudo stap mini_lua_bt.stp --skip-badvars -x $1 -u $2 > a.bt
-lua stackcollapse.lua a.bt >a.cbt
-./flamegraph.pl a.cbt >skynet.svg
+sudo stap mini_lua_bt.stp --skip-badvars -x $1 $2 $3 -g --suppress-time-limits -DMAXSTRINGLEN=65536 |tee a.bt
+./flamegraph.pl a.bt >skynet.svg
