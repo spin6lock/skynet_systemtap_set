@@ -7,3 +7,8 @@ Usage
  ```shell
  change the skynet bin source to your path, and add -g to 3rd/lua Makefile in skynet project
  # ./monitor_skynet_and_gen_svg.sh skynet_pid skynet_bin_path serviceid_in_decimal
+ ```
+
+Todo
+====
+replace filename:lineno with lua function name
